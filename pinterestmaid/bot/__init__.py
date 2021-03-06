@@ -96,6 +96,24 @@ def download_image(update: Update, data: dict):
                                reply_markup=reply_markup,
                                parse_mode=ParseMode.HTML)
 
+
+def download_embed(update: Update, data: dict):
+    pinterest_id = data['id']
+    embed = data['embed']
+    type = embed['src'].rsplit('.', 1)[1]
+    if type not in ['gif']:
+        update.message.reply_text(f'This type of media is not supported, sry! {pinterest_id}')
+        return
+
+    reply_markup = get_reply_markup(data)
+    caption = f'<code>{pinterest_id}</code>: {get_title(data)}'
+    if type == 'gif':
+        update.message.reply_video(embed['src'],
+                                   caption=caption,
+                                   reply_markup=reply_markup,
+                                   parse_mode=ParseMode.HTML)
+
+
 def download(update: Update, context: CallbackContext):
     results = re.findall('(pin\.it|pinterest\.[a-z]{1,3})\/(pin\/)?([0-9a-z]+)',
                          update.message.text,
@@ -110,7 +128,9 @@ def download(update: Update, context: CallbackContext):
             update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
             return
         data = response.json().get('data')[0]
-        if data.get('videos'):
+        if data.get('embed'):
+            download_embed(update, data)
+        elif data.get('videos'):
             download_video(update, data)
         elif data.get('images'):
             download_image(update, data)
