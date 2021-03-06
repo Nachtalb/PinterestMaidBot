@@ -10,6 +10,7 @@ import re
 import requests
 
 
+logger = logging.getLogger('PinterestMaid')
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
@@ -59,6 +60,7 @@ def get_title(data):
 
 def download_video(update: Update, data: dict):
     pinterest_id = data['id']
+    logger.info(f'Video: {pinterest_id}')
     videos = data['videos']['video_list']
     video_types = videos.keys()
     compatible_type = filter(None, map(lambda t: re.match('V_(\d+)P', t), video_types))
@@ -81,11 +83,13 @@ def download_video(update: Update, data: dict):
                                           caption=caption, parse_mode=ParseMode.HTML,
                                           reply_markup=reply_markup)
         except BadRequest:
+            logger.info(f'Video: {pinterest_id} - Failed send with type {our_type}')
             update.message.reply_markdown(f'Something went wrong, sry! `pinterest_id`')
 
 
 def download_image(update: Update, data: dict):
     pinterest_id = data['id']
+    logger.info(f'Image: {pinterest_id}')
     image = next(iter(reversed(data.get('images', {}).values())), None)
     if not image:
         update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
@@ -102,10 +106,12 @@ def download_image(update: Update, data: dict):
 
 def download_embed(update: Update, data: dict):
     pinterest_id = data['id']
+    logger.info(f'Embed: {pinterest_id}')
     embed = data['embed']
     type = embed['src'].rsplit('.', 1)[1]
     if type not in ['gif']:
         update.message.reply_text(f'This type of media is not supported, sry! {pinterest_id}')
+        logger.info(f'Embed: {pinterest_id} - Unknown type {type}')
         return
 
     reply_markup = get_reply_markup(data)
@@ -118,6 +124,7 @@ def download_embed(update: Update, data: dict):
 
 
 def resolve_shortcut(short_id):
+    logger.info(f'Resolve: {short_id}')
     session = HTMLSession()
     response = session.get(f'https://pin.it/{short_id}')
     if response.status_code == 302:
@@ -141,6 +148,7 @@ def download(update: Update, context: CallbackContext):
 
     for match_group in results:
         pinterest_id = match_group[2]
+        logger.info(f'Incoming: {pinterest_id}')
         if match_group[0] == 'pin.it':
             actual_pinterest_id = resolve_shortcut(pinterest_id)
             if not pinterest_id:
@@ -172,6 +180,7 @@ def main():
     updater = Updater(token=os.environ['TELEGRAM_TOKEN'], use_context=True)
     updater.dispatcher.add_handler(CommandHandler('start', start))
     updater.dispatcher.add_handler(MessageHandler(Filters.text, download))
+    logger.info(f'Start: https://t.me/{updater.bot.get_me().username}')
     updater.start_polling()
     updater.idle()
 
