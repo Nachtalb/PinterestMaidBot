@@ -141,7 +141,8 @@ def resolve_shortcut(short_id):
 def download(update: Update, context: CallbackContext):
     results = URL_REG.findall(update.message.text)
     if not results:
-        update.message.reply_text('No Pinterest URL found')
+        if update.message.chat.type == 'private':
+            update.message.reply_text('No Pinterest URL found')
         return
 
     ids_used = []
