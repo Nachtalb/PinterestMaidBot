@@ -1,3 +1,4 @@
+from namedentities import unicode_entities as ue
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
@@ -5,6 +6,7 @@ import logging
 import os
 import re
 import requests
+
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -19,21 +21,19 @@ def get_reply_markup(data):
         InlineKeyboardButton('Pinterest', f'https://www.pinterest.com/pin/{pinterest_id}')
     )
 
-    rich_metadata = data['rich_metadata']
+    rich_metadata = data.get('rich_metadata')
     if rich_metadata:
         site_name = rich_metadata.get('site_name', 'Source').capitalize()
         url = rich_metadata['url']
     else:
         site_name = 'Source'
         url = data.get('link')
-    if not url:
-        default_buttons.append(
-            InlineKeyboardButton(site_name, rich_metadata['url'])
-        )
+    if url:
+        default_buttons.append(InlineKeyboardButton(ue(site_name), url))
 
     if attr := data.get('attribution'):
         extra_buttons.append(
-            InlineKeyboardButton(attr['provider_name'].capitalize(), attr['url'])
+            InlineKeyboardButton(ue(attr['provider_name']).capitalize(), attr['url'])
         )
 
     if board := data.get('board'):
@@ -66,16 +66,16 @@ def download_video(update: Update, data: dict):
     video = videos[our_type]
 
     reply_markup = get_reply_markup(data)
-    caption = '`{}`: {}'.format(pinterest_id, get_title(data))
+    caption = f'<code>{pinterest_id}</code>: {get_title(data)}'
     if compatible_type:
         update.message.reply_video(video['url'], duration=video['duration'], width=video['width'],
                                    height=video['height'], thumb=video['thumbnail'],
-                                   caption=caption, parse_mode=ParseMode.MARKDOWN,
+                                   caption=caption, parse_mode=ParseMode.HTML,
                                    reply_markup=reply_markup)
     else:
         try:
             update.message.reply_document(video['url'], thumb=video['thumbnail'],
-                                          caption=caption, parse_mode=ParseMode.MARKDOWN,
+                                          caption=caption, parse_mode=ParseMode.HTML,
                                           reply_markup=reply_markup)
         except BadRequest:
             update.message.reply_markdown(f'Something went wrong, sry! `pinterest_id`')
@@ -90,12 +90,11 @@ def download_image(update: Update, data: dict):
     image_url = image['url']
 
     reply_markup = get_reply_markup(data)
+    caption = f'<code>{pinterest_id}</code>: {get_title(data)}'
     update.message.reply_photo(image_url,
-                               caption='`{}`: {}'.format(
-                                   pinterest_id,
-                                   get_title(data)),
+                               caption=caption,
                                reply_markup=reply_markup,
-                               parse_mode=ParseMode.MARKDOWN)
+                               parse_mode=ParseMode.HTML)
 
 def download(update: Update, context: CallbackContext):
     results = re.findall('(pin\.it|pinterest\.[a-z]{1,3})\/(pin\/)?([0-9a-z]+)',
