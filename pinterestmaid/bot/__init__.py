@@ -8,6 +8,31 @@ import requests
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
+def download_video(update: Update, data: dict):
+    pinterest_id = data['id']
+    pass
+
+
+def download_image(update: Update, data: dict):
+    pinterest_id = data['id']
+    image = next(iter(reversed(data.get('images', {}).values())), None)
+    if not image:
+        update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
+        return
+    image_url = image['url']
+    reply_markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton('Pinterest', f'https://www.pinterest.ch/pin/{pinterest_id}'),
+            InlineKeyboardButton('Source', data['rich_metadata']['url'])
+        ]
+    ])
+
+    update.message.reply_photo(image_url,
+                               caption='`{}`: {}'.format(
+                                   pinterest_id,
+                                   data['rich_metadata']['title']),
+                               reply_markup=reply_markup,
+                               parse_mode=ParseMode.MARKDOWN)
 
 def download(update: Update, context: CallbackContext):
     results = re.findall('(pin\.it|pinterest\.[a-z]{1,3})\/(pin\/)?([0-9a-z]+)',
@@ -23,25 +48,10 @@ def download(update: Update, context: CallbackContext):
             update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
             return
         data = response.json().get('data')[0]
-        image = next(iter(reversed(data.get('images', {}).values())), None)
-        if not image:
-            update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
-            return
-        image_url = image['url']
-        reply_markup = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton('Pinterest', f'https://www.pinterest.ch/pin/{pinterest_id}'),
-                InlineKeyboardButton('Source', data['rich_metadata']['url'])
-            ]
-        ])
-
-        update.message.reply_photo(image_url,
-                                   caption='`{}`: {}'.format(
-                                       pinterest_id,
-                                       data['rich_metadata']['title']),
-                                   reply_markup=reply_markup,
-                                   parse_mode=ParseMode.MARKDOWN)
-
+        if data.get('videos'):
+            download_video(update, data)
+        elif data.get('images'):
+            download_image(update, data)
 
 def start(update: Update, context: CallbackContext):
     update.message.reply_text('Just send me a pinterets link and I\'ll send you the content')
