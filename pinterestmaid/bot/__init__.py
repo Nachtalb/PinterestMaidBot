@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+from telegram.error import BadRequest
 import logging
 import os
 import re
@@ -10,7 +11,35 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 def download_video(update: Update, data: dict):
     pinterest_id = data['id']
-    pass
+    videos = data['videos']['video_list']
+    video_types = videos.keys()
+    compatible_type = filter(None, map(lambda t: re.match('V_(\d+)P', t), video_types))
+    compatible_type = max(compatible_type, key=lambda match: int(match.groups()[0])) if compatible_type else None
+    compatible_type = compatible_type.string if compatible_type else None
+
+    our_type = compatible_type or next(iter(video_types))
+    video = videos[our_type]
+
+    reply_markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton('Pinterest', f'https://www.pinterest.ch/pin/{pinterest_id}'),
+            InlineKeyboardButton('Source', data['rich_metadata']['url'])
+        ]
+    ])
+
+    caption = '`{}`: {}'.format(pinterest_id, data['rich_metadata']['title'])
+    if compatible_type:
+        update.message.reply_video(video['url'], duration=video['duration'], width=video['width'],
+                                   height=video['height'], thumb=video['thumbnail'],
+                                   caption=caption, parse_mode=ParseMode.MARKDOWN,
+                                   reply_markup=reply_markup)
+    else:
+        try:
+            update.message.reply_document(video['url'], thumb=video['thumbnail'],
+                                          caption=caption, parse_mode=ParseMode.MARKDOWN,
+                                          reply_markup=reply_markup)
+        except BadRequest:
+            update.message.reply_markdown(f'Something went wrong, sry! `pinterest_id`')
 
 
 def download_image(update: Update, data: dict):
