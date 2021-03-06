@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
 from telegram.error import BadRequest
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
 import logging
 import os
 import re
@@ -8,6 +8,51 @@ import requests
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
+
+
+def get_reply_markup(data):
+    pinterest_id = data['id']
+    default_buttons = []
+    extra_buttons = []
+
+    default_buttons.append(
+        InlineKeyboardButton('Pinterest', f'https://www.pinterest.com/pin/{pinterest_id}')
+    )
+
+    rich_metadata = data['rich_metadata']
+    if rich_metadata:
+        site_name = rich_metadata.get('site_name', 'Source').capitalize()
+        url = rich_metadata['url']
+    else:
+        site_name = 'Source'
+        url = data.get('link')
+    if not url:
+        default_buttons.append(
+            InlineKeyboardButton(site_name, rich_metadata['url'])
+        )
+
+    if attr := data.get('attribution'):
+        extra_buttons.append(
+            InlineKeyboardButton(attr['provider_name'].capitalize(), attr['url'])
+        )
+
+    if board := data.get('board'):
+        extra_buttons.append(
+            InlineKeyboardButton('Board', f'https://www.pinterest.com{board["url"]}')
+        )
+
+    reply_markup = [
+        default_buttons,
+    ]
+
+    if extra_buttons:
+        reply_markup.append(extra_buttons)
+    return InlineKeyboardMarkup(reply_markup)
+
+
+def get_title(data):
+    return (data.get('rich_metadata') or {}).get('title') or data.get('description')
+
 
 def download_video(update: Update, data: dict):
     pinterest_id = data['id']
@@ -20,14 +65,8 @@ def download_video(update: Update, data: dict):
     our_type = compatible_type or next(iter(video_types))
     video = videos[our_type]
 
-    reply_markup = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton('Pinterest', f'https://www.pinterest.ch/pin/{pinterest_id}'),
-            InlineKeyboardButton('Source', data['rich_metadata']['url'])
-        ]
-    ])
-
-    caption = '`{}`: {}'.format(pinterest_id, data['rich_metadata']['title'])
+    reply_markup = get_reply_markup(data)
+    caption = '`{}`: {}'.format(pinterest_id, get_title(data))
     if compatible_type:
         update.message.reply_video(video['url'], duration=video['duration'], width=video['width'],
                                    height=video['height'], thumb=video['thumbnail'],
@@ -49,17 +88,12 @@ def download_image(update: Update, data: dict):
         update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
         return
     image_url = image['url']
-    reply_markup = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton('Pinterest', f'https://www.pinterest.ch/pin/{pinterest_id}'),
-            InlineKeyboardButton('Source', data['rich_metadata']['url'])
-        ]
-    ])
 
+    reply_markup = get_reply_markup(data)
     update.message.reply_photo(image_url,
                                caption='`{}`: {}'.format(
                                    pinterest_id,
-                                   data['rich_metadata']['title']),
+                                   get_title(data)),
                                reply_markup=reply_markup,
                                parse_mode=ParseMode.MARKDOWN)
 
