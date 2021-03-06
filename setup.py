@@ -22,6 +22,7 @@ setup(
 
     install_requires=[
         'python-telegram-bot',
+        'requests',
     ],
 
     classifiers=[
