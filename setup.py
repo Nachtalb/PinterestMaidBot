@@ -24,6 +24,7 @@ setup(
         'python-telegram-bot',
         'requests',
         'namedentities',
+        'requests-html',
     ],
 
     classifiers=[

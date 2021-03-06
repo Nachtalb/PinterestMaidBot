@@ -1,4 +1,6 @@
 from namedentities import unicode_entities as ue
+from requests_html import HTMLSession
+from requests_html import HTMLSession
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
@@ -11,6 +13,7 @@ import requests
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
+URL_REG = re.compile('(pin\.it|pinterest\.[a-z]{1,3})\/(pin\/)?([0-9a-z]+)', flags=re.IGNORECASE)
 
 def get_reply_markup(data):
     pinterest_id = data['id']
@@ -114,15 +117,41 @@ def download_embed(update: Update, data: dict):
                                    parse_mode=ParseMode.HTML)
 
 
+def resolve_shortcut(short_id):
+    session = HTMLSession()
+    response = session.get(f'https://pin.it/{short_id}')
+    if response.status_code == 302:
+        url = response.headers['location']
+    elif response.status_code == 200:
+        meta_tag = response.html.find('meta[name="og:url"]')
+        if not meta_tag:
+            return
+        url = meta_tag[0].attrs['content']
+    match = next(URL_REG.finditer(url), None)
+    return match.groups()[2] if match else None
+
+
 def download(update: Update, context: CallbackContext):
-    results = re.findall('(pin\.it|pinterest\.[a-z]{1,3})\/(pin\/)?([0-9a-z]+)',
-                         update.message.text,
-                         flags=re.IGNORECASE)
+    results = URL_REG.findall(update.message.text)
     if not results:
         update.message.reply_text('No Pinterest URL found')
         return
 
-    for pinterest_id in [group[2] for group in results]:
+    ids_used = []
+
+    for match_group in results:
+        pinterest_id = match_group[2]
+        if match_group[0] == 'pin.it':
+            actual_pinterest_id = resolve_shortcut(pinterest_id)
+            if not pinterest_id:
+                update.message.reply_text(f'Could not resolve short id {pinterest_id}')
+                continue
+            pinterest_id = actual_pinterest_id
+
+        if pinterest_id in ids_used:
+            continue
+        ids_used.append(pinterest_id)
+
         response = requests.get(f'https://api.pinterest.com/v3/pidgets/pins/info/?pin_ids={pinterest_id}')
         if response.status_code != 200:
             update.message.reply_markdown(f'Something went wrong, sry! `{pinterest_id}`')
